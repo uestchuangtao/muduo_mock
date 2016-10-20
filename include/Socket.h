@@ -7,18 +7,19 @@ class Socket : boost::noncopyable
 {
     public:
         explicit Socket(int sockfd)
-        :mSockfd(sockfd)
+            :M_sockfd(sockfd)
         { }
+
         ~Socket();
 
         int fd() const
         {
-            return mSockfd;
+            return M_sockfd;
         }
 
 
     private:
-        const int mSockfd;
+        const int M_sockfd;
 };
 
 #endif // SOCKET_H
