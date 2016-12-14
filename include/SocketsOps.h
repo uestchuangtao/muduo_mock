@@ -34,7 +34,7 @@ const struct sockaddr_in6* sockaddr_in6_cast(const struct sockaddr *addr);
 
 struct sockaddr_in6 getLocalAddr(int sockfd);
 struct sockaddr_in6 getPeerAddr(int sockfd);
-//bool isSelfConnect(int sockfd);
+bool isSelfConnect(int sockfd);
 
 }
 
