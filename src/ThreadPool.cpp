@@ -86,7 +86,65 @@ void ThreadPool::run(const Task& task)
 ThreadPool::Task ThreadPool::take()
 {
     MutexLockGuard lock(M_mutex);
-    
+    //always use a while-loop, due to spurious wakeup
+    while(M_queue.empty() && M_running)
+    {
+        M_notEmpty.wait();
+    }
+    Task task;
+    if(!M_queue.empty())
+    {
+        task = M_queue.front();
+        M_queue.pop_front();
+        if(M_maxQueueSize > 0)
+        {
+            M_notFull.notify();
+        }
+    }
+    return task;
+}
+
+bool ThreadPool::isFull() const 
+{
+    M_mutex.assertLocked();
+    return M_maxQueueSize > 0 && M_queue.size() >= M_maxQueueSize;
+}
+
+void ThreadPool::runInThread()
+{
+    try
+    {
+        if(M_threadInitCallback)
+        {
+            M_threadInitCallback();
+        }
+        while(M_running)
+        {
+            Task task(take());
+            if(task)
+            {
+                task();
+            }
+        }
+    }
+    catch (const Exception &ex)
+    {
+        fprintf(stderr, "exception caught in ThreadPool %s\n", M_name.c_str());
+        fprintf(stderr, "reason: %s\n", ex.what());
+        fprintf(stderr, "stack trace: %s\n", ex.stackTrace());
+        abort();
+    }
+    catch (const std::exception &ex)
+    {
+        fprintf(stderr, "exception caught in ThreadPool %s\n", M_name.c_str());
+        fprintf(stderr, "reason: %s\n", ex.what());
+        abort();
+    }
+    catch (...)
+    {
+        fprintf(stderr, "unknown exception caught in ThreadPool %s\n", M_name.c_str());
+        throw; // rethrow
+    }
 }
 
 
