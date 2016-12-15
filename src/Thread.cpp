@@ -110,7 +110,7 @@ namespace detail
     void* startThread(void *obj)
     {
         ThreadData* data = static_cast<ThreadData*>(obj);
-        data->funInThread();
+        data->runInThread();
         delete data;
         return NULL;
     }
