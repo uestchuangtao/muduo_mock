@@ -1,4 +1,5 @@
 #include "Thread.h"
+#include "CurrentThread.h"
 
 #include <boost/static_assert.hpp>
 #include <boost/type_traits/is_same.hpp>
@@ -17,21 +18,125 @@ namespace CurrentThread
     __thread int t_cachedTid = 0;
     __thread char t_tidString[32];
     __thread int t_tidStringLength = 6;
-    __thread const char * t_threadName = "unknown";
+    __thread const char* t_threadName = "unknown";
     const bool sameType = boost::is_same<int, pid_t>::value;
     BOOST_STATIC_ASSERT(sameType);
 }
 
-pid_t gettid()
+namespace detail
 {
-    return static_cast<pid_t>(::syscall(SYS_gettid()));
+   pid_t gettid()
+    {   
+        return static_cast<pid_t>(::syscall(SYS_gettid()));
+    }
+
+    void afterFork()
+    {
+        muduo::CurrentThread::t_cachedTid = 0;
+        muduo::CurrentThread::t_threadName = "main";
+        CurrentTHread::tid();
+    }
+
+    class ThreadNameInitializer
+    {
+        public:
+            ThreadNameInitializer()
+            {
+                CurrentThread::t_threadName = "main";
+                CurrentThread::tid();
+                pthread_atfork(NULL,NULL,&afterFork);
+            }
+    };
+
+    ThreadNameInitializer init;
+
+    struct ThreadData
+    {
+        typedef Thread::ThreadFunc ThreadFunc;
+        ThreadFunc M_func;
+        string M_name;
+        boost::weak_ptr<pid_t> M_wkTid;
+
+        ThreadData(const ThreadFunc& func,
+                   const string& name,
+                   const boost::shared_ptr<pid_t>& tid)
+                   :M_func(func),
+                    M_name(name),
+                    M_wkTid(tid)
+        { }
+
+        void runInThread()
+        {
+            pid_t tid = CurrentThread::tid();
+
+            boost::shared_ptr<pid_t> ptid = M_wkTid.lock();
+            if(ptid)  /// ???
+            {
+                *ptid = tid;
+                ptid.reset(); 
+            }
+
+            CurrentThread::t_threadName = name.empty() ? "muduoTHread" : name.c_str();
+            ::prctl(PR_SET_NAME, CurrentThread::t_threadName);
+            try
+            {
+                M_func();
+                CurrentThread::t_threadName = "finished";
+            }
+            catch(const Exception& ex)
+            {
+                CurrentThread::t_threadName = "crashed";
+                fprintf(stderr,"exception caught in Thread %s\n", name.c_ctr());
+                fprintf(stderr,"reason: %s\n",ex.what());
+                fprintf(stderr,"stack trace: %s\n",ex.stackTrace());
+                abort();
+            }
+            catch(const std::exception& ex)
+            {
+                CurrentThread::t_threadName = "crashed";
+                fprintf(stderr,"exception caught in Thread %s\n", name.c_ctr());
+                fprintf(stderr,"reason: %s\n",ex.what());
+                abort();
+            }
+            catch(...)
+            {
+                CurrentThread::t_threadName = "crashed";
+                fprintf(stderr, "unknown exception caught in Thread %s\n", name.c_str());
+                throw;
+            }
+        }
+    };
+
+    void* startThread(void *obj)
+    {
+        ThreadData* data = static_cast<ThreadData*>(obj);
+        data->funInThread();
+        delete data;
+        return NULL;
+    }
+ 
 }
 
-void afterFork()
+void CurrentThread::cacheTid()
 {
-    muduo::CurrentThread::t_cachedTid = 0;
-    muduo::CurrentThread::t_threadName = "main";
-    CurrentTHread::tid();
+    if(t_cachedTid == 0)
+    {
+        t_cachedTid = detail::gettid();
+        t_tidStringLength = snprintf(t_tidString, sizeof(t_tidString), "%5d", t_cachedTid);
+    }
+}
+
+bool CurrentThread::isMainThread()
+{
+    return tid() == ::getpid();
+}
+
+void CurrentThread::sleepUsec(int64_t usec)
+{
+    struct timespec ts = { 0, 0 };
+    ts.tv_sec = static_cast<time_t>(usec / Timestamp::KMicroSecondsPerSecond);
+    ts.tv.nsec = static_cast<long>(usec % TimeStamp::KMicroSecondPerSecond * 1000);
+    ::nanosleep(&ts, NULL);
 }
 
 
