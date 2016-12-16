@@ -111,6 +111,59 @@ public:
         return M_events & kReadEvent;
     }
 
+    //for Poller 
+    int index()
+    {
+        return M_index;
+    }
+
+    void set_index(int idx)
+    {
+        M_index = idx;
+    }
+
+    //for debug
+    string reventsToString() const;
+    string eventsToString() const;
+
+    void doNotLogHup()
+    {
+        M_logHup = false;
+    }
+
+    EventLoop* ownerLoop()
+    {
+        return M_loop;
+    }
+
+    void remove;
+
+private:
+    static string eventsToString(int fd, int ev);
+
+    void update();
+    void handleEventWithGuard(Timestamp receiveTime);
+
+    static const int kNoneEvent;
+    static const int kReadEvent;
+    static const int kWriteEvent;
+
+    EventLoop* M_loop;
+    const int M_fd;
+    int M_events;
+    int M_revents; // it's the received event types of epoll or poll
+    int M_index;
+    bool M_logHup;  
+
+    boost::weak_ptr<void> M_tie;
+    bool M_tied;
+    bool M_eventHandling;
+    bool M_addedToLoop;
+    ReadEventCallback M_readCallback;
+    EventCallback M_writeCallback;
+    EventCallback M_closeCallback;
+    EventCallback M_errorCallback;   
+
 };
 
 #endif
