@@ -49,5 +49,42 @@ EventLoop* EventLoopThreadPool::getNextLoop()
     M_baseLoop->assertInLoopThread();
     assert(M_started);
     EventLoop* loop = M_baseLoop;
-    
+
+    if(!M_loops.empty())
+    {
+        //round-robin
+        loop = M_loops[M_next];
+        ++M_next;
+        if(implicit_cast<size_t>(M_next) >= M_loops.size())
+        {
+            M_next = 0;
+        }
+        return loop;
+    }
+}
+
+EventLoop* EventLoopThreadPool::getLoopForHash(size_t hashCode)
+{
+    M_baseLoop->assertInLoopThread();
+    EventLoop* loop = M_baseLoop;
+
+    if(!M_loops.empty())
+    {
+        loop = M_loops[hashCode % M_loops.size()];
+    }
+    return loop;
+}
+
+std::vector<EventLoop*> EventLoopThreadPool::getAllLoops()
+{
+    M_baseLoop->assertInLoopThread();
+    assert(M_started);
+    if(M_loops.empty())
+    {
+        return std::vector<EventLoop*>(1,M_baseLoop);
+    }
+    else
+    {
+        return M_loops;
+    }
 }
